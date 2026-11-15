@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block body %}
+<style> .block { margin-top:26px; } .block h2 { margin-bottom:10px; } table.wide { font-size:13.5px; } </style>
+<h1>History</h1>
+<div class="block"><h2>Decisions</h2>
+<div class="card"><table class="wide rows"><thead><tr><th>When</th><th>Decision</th><th>Proposal</th><th>Reviewer</th><th>Reason</th></tr></thead><tbody>
+{% for d in decisions %}<tr><td class="muted">{{ d.decided_at }}</td><td>{{ d.decision }}</td><td><a href="/p/{{ d.key }}">{{ d.title|replace(" -> ", " → ") }}</a></td><td>{{ d.reviewer }}</td><td>{{ d.reason }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No decisions yet.</td></tr>{% endfor %}
+</tbody></table></div></div>
+<div class="block"><h2>CRM writes</h2>
+<div class="card"><table class="wide rows"><thead><tr><th>When</th><th>Method</th><th>Account</th><th>Result</th><th>Request</th></tr></thead><tbody>
+{% for w in writes %}<tr><td class="muted">{{ w.at }}</td><td>{{ w.method }}</td><td class="mono">{{ w.account_id or "" }}</td><td>{% if w.ok %}<span class="pill applied">ok</span>{% else %}<span class="pill failed">failed</span>{% endif %}</td><td class="mono">{{ w.request[:200] }}</td></tr>
+{% else %}<tr><td colspan="5" class="muted">No writes yet.</td></tr>{% endfor %}
+</tbody></table></div></div>
+<div class="block"><h2>Pipeline runs</h2>
+<div class="card"><table class="wide rows"><thead><tr><th>#</th><th>Started</th><th>Finished</th><th>Stats</th></tr></thead><tbody>
+{% for r in runs %}<tr><td>{{ r.id }}</td><td class="muted">{{ r.started_at }}</td><td class="muted">{{ r.finished_at }}</td><td class="mono">{{ (r.stats or "")[:300] }}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

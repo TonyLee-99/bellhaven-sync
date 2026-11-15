@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Bellhaven ownership review{% endblock %}</title>
+<style>
+  :root {
+    --paper:#f7f7f5; --surface:#ffffff; --well:#f1f1ee;
+    --ink:#1c1e21; --ink-2:#4a4f57; --muted:#6b717a; --line:#e3e3df; --line-2:#d2d2cc;
+    --acc:#1f5fbf; --acc-ink:#ffffff;
+    --ok:#1b7a3d; --ok-bg:#e8f4ec; --bad:#b4232a; --bad-bg:#fbecec; --warn:#8a5a00; --warn-bg:#fdf5e3;
+    --r:8px;
+  }
+  * { box-sizing:border-box; }
+  html { background:var(--paper); }
+  body { margin:0; font:15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+         color:var(--ink); font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased; }
+  a { color:var(--acc); text-decoration:none; } a:hover { text-decoration:underline; }
+  :focus-visible { outline:2px solid var(--acc); outline-offset:2px; border-radius:4px; }
+  h1, h2, h3, h4 { line-height:1.25; text-wrap:balance; margin:0; }
+  h1 { font-size:24px; font-weight:650; letter-spacing:-0.01em; }
+  h2 { font-size:17px; font-weight:650; }
+  h3 { font-size:15px; font-weight:650; }
+  h4 { font-size:14px; font-weight:600; color:var(--ink-2); margin:20px 0 6px; }
+  p { margin:8px 0; }
+
+  /* top bar */
+  header { position:sticky; top:0; z-index:10; background:var(--surface); border-bottom:1px solid var(--line); }
+  header .in { max-width:1240px; margin:0 auto; padding:0 24px; height:56px; display:flex; align-items:center; gap:4px; }
+  header .brand { font-weight:650; color:var(--ink); margin-right:20px; }
+  header nav a { color:var(--ink-2); padding:6px 10px; border-radius:6px; font-size:14px; }
+  header nav a:hover { background:var(--well); text-decoration:none; }
+  header nav a.on { color:var(--ink); background:var(--well); font-weight:600; }
+  header .spacer { flex:1; }
+  header .env { font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 10px; }
+  main { max-width:1240px; margin:0 auto; padding:28px 24px 96px; }
+
+  /* text helpers */
+  .muted { color:var(--muted); } .small { font-size:13px; }
+  code, .mono { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12.5px; }
+  .new { color:var(--ok); font-weight:600; } .old { color:var(--bad); text-decoration:line-through; text-decoration-color:rgba(180,35,42,.5); }
+
+  /* chips */
+  .pill { display:inline-block; padding:1px 9px; border-radius:999px; font-size:12px; line-height:20px; white-space:nowrap;
+          background:var(--well); color:var(--ink-2); }
+  .pill.high { background:var(--ok-bg); color:var(--ok); } .pill.medium { background:var(--warn-bg); color:var(--warn); }
+  .pill.low { background:var(--bad-bg); color:var(--bad); }
+  .pill.pending { background:#e7effb; color:var(--acc); } .pill.applied { background:var(--ok-bg); color:var(--ok); }
+  .pill.failed { background:var(--bad-bg); color:var(--bad); } .pill.rejected, .pill.superseded { color:var(--muted); }
+  .tag { display:inline-block; font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:4px; padding:0 6px; margin:2px 4px 0 0; }
+
+  /* tables: horizontal rules only */
+  table { border-collapse:collapse; width:100%; }
+  th, td { border-bottom:1px solid var(--line); padding:9px 12px; text-align:left; vertical-align:top; }
+  th { font-weight:600; font-size:12.5px; color:var(--muted); white-space:nowrap; background:transparent; }
+  tbody tr:last-child td { border-bottom:0; }
+  .rows tbody tr:hover td { background:#fafaf8; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); }
+  .card > table th:first-child, .card > table td:first-child { padding-left:18px; }
+  .card > table th:last-child, .card > table td:last-child { padding-right:18px; }
+  .card-h { padding:14px 18px 10px; display:flex; align-items:baseline; gap:10px; border-bottom:1px solid var(--line); }
+  .card-b { padding:14px 18px; }
+  .box { background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:14px 18px; margin:14px 0; }
+
+  /* banners */
+  .msg, .err, .warn, .info { padding:10px 14px; border-radius:6px; margin:10px 0; font-size:14px; border-left:3px solid; }
+  .msg { background:var(--ok-bg); border-color:var(--ok); }
+  .err { background:var(--bad-bg); border-color:var(--bad); }
+  .warn { background:var(--warn-bg); border-color:#d9a326; }
+  .info { background:var(--well); border-color:var(--line-2); color:var(--ink-2); }
+
+  /* controls */
+  button, .btn { font:inherit; font-size:14px; height:36px; padding:0 16px; border-radius:6px; border:1px solid var(--line-2);
+                 background:var(--surface); color:var(--ink); cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+  button:hover, .btn:hover { background:var(--well); text-decoration:none; }
+  button:disabled { opacity:.55; cursor:default; }
+  button.approve { background:var(--ok); color:#fff; border-color:var(--ok); font-weight:600; }
+  button.approve:hover { background:#166a34; }
+  button.reject { color:var(--bad); border-color:#e2b4b6; } button.reject:hover { background:var(--bad-bg); }
+  input[type=text], textarea { font:inherit; font-size:14px; padding:7px 10px; border:1px solid var(--line-2); border-radius:6px;
+                               width:100%; background:var(--surface); }
+  label { font-size:13px; color:var(--ink-2); }
+  label input[type=text] { margin-top:4px; }
+  .grid2 { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:16px; }
+  @media (prefers-reduced-motion: no-preference) { button, a, header nav a { transition:background-color 120ms, color 120ms; } }
+</style>
+</head>
+<body>
+<header><div class="in">
+  <a class="brand" href="/">Bellhaven ownership review</a>
+  {% set here = request.url.path %}
+  <nav>
+    <a href="/?status=pending" class="{{ 'on' if here == '/' or here.startswith('/p/') }}">Queue <span class="muted">{{ counts.get('pending', 0) }}</span></a>
+    <a href="/history" class="{{ 'on' if here == '/history' }}">History</a>
+    {% if browser %}<a href="{{ browser }}/accounts" target="_blank">CRM browser ↗</a>{% endif %}
+  </nav>
+  <span class="spacer"></span>
+  <span class="env" title="Which CRM this app writes to">{{ env }}</span>
+</div></header>
+<main>
+{% block body %}{% endblock %}
+</main>
+</body>
+</html>

@@ -1,0 +1,58 @@
+# Bellhaven ownership sync - tunable business rules (thresholds, vocabulary, which differences to propose).
+# Matching / survivor logic itself is in src/bellhaven_sync/match.py and plan.py.
+# Secrets (CRM token) come from the environment / .env, never from this file.
+
+website:
+  base_url: ${WEBSITE_BASE_URL}          # e.g. http://127.0.0.1:8200 (local mirror) or the live site
+  list_path: /communities
+  max_list_pages: 50                     # safety stop for pagination
+
+crm:
+  base_url: ${CRM_BASE_URL}              # e.g. http://127.0.0.1:8100/api/v1 (local mock) or the live API
+  browser_url: ${CRM_BROWSER_URL}        # optional: link each account in the review app to the CRM browser
+  page_size: 100
+
+operator:
+  name: Bellhaven Senior Living
+  parent_account_name: Bellhaven Senior Living (Parent Account)
+  # Groups whose communities Bellhaven has absorbed (from the About page). Ownership is decided by the website
+  # listing, not by this list; it is used as one survivor-selection rule (a copy under a documented predecessor
+  # beats an orphan) and as evidence text.
+  predecessor_parents:
+    - Harborview Care Group (Parent Account)
+    - Cedar Trail Communities (Parent Account)
+
+# Website care offering -> CRM care_type vocabulary
+care_type_map:
+  Short-Term Rehabilitation & Nursing: Skilled Nursing
+  Assisted Living: Assisted Living
+  Memory Support: Memory Care
+  Independent Living: Independent Living
+
+matching:
+  street_fuzzy_min: 90        # rapidfuzz ratio on normalized street (house number must be equal)
+  name_fuzzy_min: 85          # name+city fallback (PO Box / blank / mistyped street); also needs zip or phone
+
+sop:
+  # Billing SOP: an account with revenue history AND outstanding AR may not be re-parented.
+  revenue_field: lifetime_revenue
+  ar_field: outstanding_ar
+  # A billing-locked account that left Bellhaven, when the new operator's account already exists at the
+  # same address: "link" (default) = leave the old account as it is and point its chow_current_account at the
+  # existing successor account, so no second record is created for the same facility; "create" = literal
+  # reading of the SOP - create a new account under the new parent, point the old one at it, and retire the
+  # pre-existing copy as a duplicate of the new one.
+  existing_successor: link
+
+state:
+  # one DB per CRM environment, so decisions made against the local mock never suppress real-sandbox proposals
+  db_path: state/{env}.db
+
+# Which differences generate a proposal. Turning one off is the intended "small live change".
+propose:
+  name: true
+  cosmetic_name: true        # also align names that differ only in formatting ("Rehab and" vs "Rehabilitation &")
+  address: true
+  zip: true
+  # care_type is not proposed: the CRM keeps one value, the site lists several, and no current value conflicts.
+  # Phones are never written: 24 of 35 website area codes don't match the facility's state.

@@ -1,0 +1,5 @@
+# Bellhaven ownership sync - run once a day at 06:17 (machine local time).
+# Install: run `crontab -e` and paste the line below, with the absolute path of your checkout.
+# Needs the checkout's .venv (`uv sync`) and .env (CRM URLs + token; ALLOW_REMOTE=1 for a remote CRM).
+# The review app (`bhsync review`) reads the same state DB, so new proposals appear in its queue.
+17 6 * * * /ABSOLUTE/PATH/TO/bellhaven-sync/deploy/daily_run.sh

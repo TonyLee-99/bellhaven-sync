@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}{{ p.title }}{% endblock %}
+{% block body %}
+<style>
+  .crumbs { display:flex; align-items:center; gap:14px; font-size:14px; margin-bottom:14px; }
+  .crumbs .pos { color:var(--muted); }
+  .crumbs .nx { margin-left:auto; display:flex; gap:8px; }
+  .crumbs .nx a, .crumbs .nx span { height:32px; padding:0 12px; font-size:13.5px; }
+  .crumbs .nx span { color:var(--muted); border:1px solid var(--line); border-radius:6px; display:inline-flex; align-items:center; }
+  .layout { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:28px; align-items:start; }
+  @media (max-width: 960px) { .layout { grid-template-columns:minmax(0,1fr); } .side { position:static !important; } }
+  .title h1 { font-size:22px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0 2px; }
+  .summary { font-size:15.5px; color:var(--ink); max-width:75ch; margin:14px 0 4px; }
+  .block { margin-top:26px; }
+  .block > h2 { margin-bottom:10px; }
+  .callout { background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--acc); border-radius:6px;
+             padding:12px 16px; margin:10px 0; }
+  .callout b { display:block; font-size:12.5px; color:var(--muted); font-weight:600; margin-bottom:2px; }
+  table.diff td.web { color:var(--ok); font-weight:600; } table.diff td.crm { color:var(--bad); }
+  table.diff tr.same td { color:var(--muted); }
+  table.diff tr.differs td:first-child { box-shadow:inset 3px 0 0 #d9a326; }
+  table.diff td.f, table.w td.f { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12.5px; color:var(--ink-2); white-space:nowrap; }
+  table.w tr.step td { background:var(--well); font-size:13px; color:var(--ink-2); padding-top:7px; padding-bottom:7px; }
+  table.w tr.step td b { color:var(--ink); }
+  table.w td .lbl { display:block; font-size:12.5px; color:var(--muted); font-weight:400; text-decoration:none; }
+  table.wide { font-size:13.5px; } table.wide td, table.wide th { padding:7px 10px; }
+  .scroll { overflow-x:auto; }
+  .side { position:sticky; top:76px; }
+  .side .card-b { display:flex; flex-direction:column; gap:12px; }
+  .side .row { display:flex; justify-content:space-between; font-size:13.5px; }
+  .side .row span:first-child { color:var(--muted); }
+  .side button { width:100%; justify-content:center; }
+  .side .hint { font-size:12.5px; color:var(--muted); margin:0; }
+  .side .key { font-size:11.5px; color:var(--muted); word-break:break-all; }
+  ul.plain { margin:4px 0; padding-left:18px; } ul.plain li { margin:3px 0; }
+</style>
+
+<div class="crumbs">
+  <a href="/">← Queue</a>
+  {% if nav.pos %}<span class="pos">Pending item {{ nav.pos }} of {{ nav.total }}</span>{% elif nav.total %}<span class="pos">{{ nav.total }} still pending</span>{% endif %}
+  <div class="nx">
+    {% if nav.prev %}<a class="btn" href="/p/{{ nav.prev }}">← Previous</a>{% endif %}
+    {% if nav.next %}<a class="btn" href="/p/{{ nav.next }}">Next pending →</a>{% else %}<span>No more pending</span>{% endif %}
+  </div>
+</div>
+
+{% if msg %}<p class="msg">{{ msg }}{% if nav.next %} <a href="/p/{{ nav.next }}">Go to the next pending item →</a>{% endif %}</p>{% endif %}
+{% if err %}<p class="err">{{ err }}</p>{% endif %}
+
+{% set ev = p.evidence %}
+<div class="layout">
+<div class="main">
+  <div class="title">
+    <h1>{{ p.title|replace(" -> ", " → ") }}</h1>
+    <div class="chips"><span class="pill">{{ kind_label[p.kind] }}</span>
+      <span class="pill {{ p.confidence }}">{{ p.confidence }} confidence</span>
+      <span class="pill {{ p.status }}">{{ p.status }}</span>
+      {% for t in p.tags %}<span class="tag">{{ t }}</span>{% endfor %}</div>
+  </div>
+  <p class="summary">{{ p.summary }}</p>
+  {% for w in [ev.get('warning'), ev.get('rename_warning')] if w %}<p class="warn">{{ w }}</p>{% endfor %}
+
+  {% if ev.get('sop') %}<div class="callout"><b>Billing SOP check</b>{{ ev.sop }}</div>{% endif %}
+  {% if ev.get('why') %}<div class="callout"><b>Why</b>{{ ev.why }}</div>{% endif %}
+  {% if ev.get('why_not_matched') %}<div class="callout"><b>Why no match</b>{{ ev.why_not_matched }}</div>{% endif %}
+  {% if ev.get('survivor_reason') %}<div class="callout"><b>Which record is kept</b>The one that is "{{ ev.survivor_reason }}".</div>{% endif %}
+  {% if ev.get('po_box_note') %}<p class="info">{{ ev.po_box_note }}</p>{% endif %}
+
+  <div class="block">
+    <h2>Website vs CRM</h2>
+    {% if compare %}
+    <div class="card"><table class="diff">
+      <thead><tr><th style="width:24%">Field</th><th>Website (<a href="{{ ev.website.url }}" target="_blank">source page ↗</a>)</th><th>CRM, when this was planned</th></tr></thead>
+      <tbody>
+      {% for r in compare %}
+      <tr class="{{ 'differs' if r.differs else 'same' }}"><td class="f">{{ r.field }}{% if r.changes %}<br><span class="pill pending">will change</span>{% endif %}</td>
+          <td {% if r.differs %}class="web"{% endif %}>{{ r.website }}{% if r.fmt_only %} <span class="tag">same, written differently</span>{% endif %}{% if r.note %}<span class="lbl muted small" style="display:block">{{ r.note }}</span>{% endif %}</td>
+          <td {% if r.differs %}class="crm"{% endif %}>{{ r.crm }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <p class="small muted">Marked rows differ: website value in green, CRM value in red. Rows tagged "same, written differently" (Dr vs Drive, &amp; vs and) are not real differences.</p>
+    {% elif ev.get('website') %}
+    <div class="card"><table class="diff">
+      <thead><tr><th style="width:24%">Field</th><th>Website (<a href="{{ ev.website.url }}" target="_blank">source page ↗</a>)</th></tr></thead>
+      <tbody>
+      {% for k in ['name','street','city','state','zip','care_offerings','administrator','phone','found_via'] %}
+      <tr><td class="f">{{ k }}</td><td>{{ ev.website[k]|join(', ') if ev.website[k] is iterable and ev.website[k] is not string else ev.website[k] }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% else %}<p class="muted">This location is not on the website (see the CRM record below).</p>{% endif %}
+    {% if ev.get('website') and ev.website.get('warnings') %}{% for w in ev.website.warnings %}<p class="warn">Website note: {{ w }}</p>{% endfor %}{% endif %}
+    {% if ev.get('match') %}
+    <p class="small"><span class="muted">How it matched:</span>
+      {% for k, v in ev.match.items() %}<span class="tag mono">{{ k }}={{ v }}</span>{% endfor %}</p>
+    {% endif %}
+  </div>
+
+  <div class="block">
+    <h2>What approving will write</h2>
+    <div class="card"><table class="w">
+      <thead><tr><th style="width:24%">Field</th><th>Current</th><th>Proposed</th></tr></thead>
+      <tbody>
+      {% for op in p.ops %}{% set i = loop.index %}
+        <tr class="step"><td colspan="3"><b>Step {{ i }}: {{ "Create a new account" if op.action == "create" else "Update" }}</b>
+          {% if op.account_id %}&nbsp;
+            {% if browser %}<a class="mono" href="{{ browser }}/accounts/{{ op.account_id }}" target="_blank">{{ op.account_id }}</a>{% else %}<span class="mono">{{ op.account_id }}</span>{% endif %}
+            {% if p.labels and p.labels.get(op.account_id) %}<span class="muted">({{ p.labels.get(op.account_id) }})</span>{% endif %}
+          {% endif %}</td></tr>
+        {% for k, v in op.fields.items() %}
+        {% set ov = op.old.get(k, "") if op.action == "patch" else "" %}
+        <tr>
+          <td class="f">{{ k }}</td>
+          <td class="old">{{ ov }}{% if p.labels and ov in p.labels %}<span class="lbl">{{ p.labels[ov] }}</span>{% endif %}</td>
+          <td class="new">{{ "id of the account created in step 1" if v == "$new" else v }}{% if p.labels and v in p.labels %}<span class="lbl">{{ p.labels[v] }}</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        {% if op.append_note %}<tr><td class="f">note</td><td></td><td class="new">+ "{{ op.append_note }}"</td></tr>{% endif %}
+        {% for r in op.requires %}<tr><td class="f">check</td><td colspan="2" class="muted"><span class="mono">{{ r.account_id }}</span>
+          {% if p.labels.get(r.account_id) %}({{ p.labels.get(r.account_id) }}){% endif %} must still be a current record (not retired as a duplicate, not CHOW-linked)</td></tr>{% endfor %}
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+
+  {% if ev.get('survivor') %}
+  <h4>Record that is kept</h4>
+  <div class="card scroll"><table class="wide"><thead><tr>{% for k in ['account_id','name','parent_name','billing_street','status','lifetime_revenue','outstanding_ar'] %}<th>{{ k }}</th>{% endfor %}</tr></thead>
+  <tbody><tr>{% for k in ['account_id','name','parent_name','billing_street','status','lifetime_revenue','outstanding_ar'] %}<td>{{ ev.survivor[k] }}</td>{% endfor %}</tr></tbody></table></div>
+  {% endif %}
+
+  {% if ev.get('retire_reasons') %}<h4>Copies retired in this change</h4><ul class="plain">{% for k, v in ev.retire_reasons.items() %}<li><span class="mono">{{ k }}</span> ({{ p.labels.get(k, "") }}): {{ v }}</li>{% endfor %}</ul>{% endif %}
+  {% if ev.get('conflicting_locations') %}<h4>Website locations that all match this record</h4><ul class="plain">{% for l in ev.conflicting_locations %}<li>{{ l.name }}: {{ l.street }}, {{ l.city }} {{ l.state }} {{ l.zip }}</li>{% endfor %}</ul>{% endif %}
+  {% if ev.get('duplicate_group') and ev.duplicate_group|length > 1 %}
+  <p class="small"><span class="muted">All CRM records at this address:</span> <span class="mono">{{ ev.duplicate_group|join(", ") }}</span></p>
+  {% endif %}
+
+  {% for label, rows in [("CRM record", [ev.get('crm')] if ev.get('crm') and not compare else []),
+                         ("Same address, other operators", ev.get('same_address_other_operators', [])),
+                         ("Nearby accounts checked (not a match)", ev.get('checked_not_matching', []))] if rows %}
+  <h4>{{ label }}</h4>
+  <div class="card scroll"><table class="wide"><thead><tr>{% for k in ['account_id','name','parent_name','billing_street','billing_city','billing_state','status','lifetime_revenue','outstanding_ar'] %}<th>{{ k }}</th>{% endfor %}</tr></thead>
+  <tbody>{% for a in rows %}<tr>{% for k in ['account_id','name','parent_name','billing_street','billing_city','billing_state','status','lifetime_revenue','outstanding_ar'] %}<td>{{ a[k] }}</td>{% endfor %}</tr>{% endfor %}</tbody></table></div>
+  {% endfor %}
+
+  {% set cs = ev.get('contacts') or ev.get('contacts_on_this_copy') %}
+  {% if cs %}<h4>Contacts on this record</h4><ul class="plain">{% for c in cs %}<li>{{ c.name }}, {{ c.title }}</li>{% endfor %}</ul>{% endif %}
+
+  {% if p.decisions or p.writes %}
+  <div class="block">
+    <h2>Audit</h2>
+    <div class="card scroll"><table class="wide"><thead><tr><th>When</th><th>What</th><th>Detail</th></tr></thead><tbody>
+    {% for d in p.decisions %}<tr><td class="muted">{{ d.decided_at }}</td><td>{{ d.decision }} by {{ d.reviewer }}</td><td>{{ d.reason }}</td></tr>{% endfor %}
+    {% for w in p.writes %}<tr><td class="muted">{{ w.at }}</td><td>{{ w.method }} {{ w.account_id or "" }} {% if w.ok %}<span class="pill applied">ok</span>{% else %}<span class="pill failed">failed</span>{% endif %}</td><td class="mono">{{ w.request[:300] }}</td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+  {% endif %}
+</div>
+
+<aside class="side">
+  <div class="card">
+    <div class="card-h"><h2>Decision</h2></div>
+    <div class="card-b">
+      <div class="row"><span>Status</span><span class="pill {{ p.status }}">{{ p.status }}</span></div>
+      <div class="row"><span>Writes</span><span>{{ p.ops|length }} step{{ "s" if p.ops|length != 1 }}</span></div>
+      {% if p.status == "pending" %}
+      <form method="post" action="/p/{{ p.key }}/decide" style="display:flex;flex-direction:column;gap:10px"
+            onsubmit="const f=this;setTimeout(()=>f.querySelectorAll('button').forEach(b=>b.disabled=true),0);">
+        <input type="hidden" name="version" value="{{ p.version }}">
+        <label>Reviewer<input type="text" name="reviewer" value="{{ reviewer }}"></label>
+        <label>Reason or comment <span class="muted">(required to reject)</span><input type="text" name="reason" placeholder="Why"></label>
+        <button class="approve" name="decision" value="approve">Approve and write to CRM</button>
+        <button class="reject" name="decision" value="reject">Reject</button>
+      </form>
+      <p class="hint">Approving writes the steps shown, then reads them back to verify. A rejected change is not proposed again.</p>
+      {% elif p.status == "failed" %}
+      <p class="warn" style="margin:0">The last write attempt failed, or found the records changed after part of it was written (see the
+         message and the audit). A retry re-checks everything against the CRM first: steps that already landed are skipped,
+         and nothing is written if the records no longer match what was approved.</p>
+      <form method="post" action="/p/{{ p.key }}/decide" style="display:flex;flex-direction:column;gap:10px">
+        <input type="hidden" name="version" value="{{ p.version }}">
+        <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="confirm_create" value="yes" style="margin-top:3px">
+          <span>Only if the message says a create's outcome is unknown: I checked the CRM by hand and it was not created.</span></label>
+        <button name="decision" value="retry">Retry write</button></form>
+      <form method="post" action="/p/{{ p.key }}/decide" style="display:flex;flex-direction:column;gap:10px">
+        <input type="text" name="reason" placeholder="Why close it (e.g. the account already exists)">
+        <button name="decision" value="close">Close without writing</button>
+        <p class="hint">Closing writes nothing more; the next run re-plans this location from the CRM.</p></form>
+      {% elif p.status == "superseded" %}
+      <p class="hint">The CRM or the website changed, so this version is no longer current. Nothing was written. The next run
+         produces an up-to-date proposal if a change is still needed.</p>
+      {% elif p.status == "applied" %}
+      <p class="hint">Written to the CRM and verified by reading it back. See the audit for each request.</p>
+      {% elif p.status == "rejected" %}
+      <p class="hint">Rejected. Nothing was written, and this exact change will not be proposed again.</p>
+      {% endif %}
+      {% if nav.next %}<a class="btn" style="justify-content:center" href="/p/{{ nav.next }}">Next pending →</a>{% endif %}
+      <div class="key mono">key {{ p.key }}</div>
+    </div>
+  </div>
+</aside>
+</div>
+{% endblock %}

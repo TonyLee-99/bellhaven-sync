@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block body %}
+<style>
+  .head { display:flex; align-items:flex-end; gap:16px; margin-bottom:6px; }
+  .head .lede { color:var(--ink-2); max-width:72ch; margin:6px 0 0; }
+  .meta { color:var(--muted); font-size:13px; margin:0 0 18px; }
+  .bar { display:flex; align-items:center; gap:12px; margin:18px 0 8px; flex-wrap:wrap; }
+  .seg { display:inline-flex; background:var(--well); border-radius:8px; padding:3px; gap:2px; }
+  .seg a { padding:5px 12px; border-radius:6px; font-size:13.5px; color:var(--ink-2); }
+  .seg a:hover { text-decoration:none; background:rgba(255,255,255,.6); }
+  .seg a.on { background:var(--surface); color:var(--ink); font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .seg .n { color:var(--muted); margin-left:4px; font-weight:400; }
+  .bar form { margin-left:auto; }
+  section.group { margin-top:22px; }
+  section.group .card-h .muted { font-size:13px; }
+  table.q { table-layout:fixed; }
+  table.q col.c-title { width:52%; } table.q col.c-chg { width:28%; } table.q col.c-conf { width:10%; } table.q col.c-st { width:10%; }
+  table.q td a.t { color:var(--ink); font-weight:550; }
+  table.q td a.t:hover { color:var(--acc); }
+  table.q td.chg { color:var(--ink-2); font-size:13px; }
+  table.q td.chg .f { font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; }
+  table.q tr.done td a.t { color:var(--muted); font-weight:400; }
+</style>
+
+<div class="head"><div>
+  <h1>Review queue</h1>
+  <p class="lede">Each item is one proposed change to the CRM, with the evidence behind it. Nothing is written until you approve it.</p>
+</div></div>
+{% if last_run %}<p class="meta">Last run #{{ last_run.id }} finished {{ (last_run.finished_at or "")[:16]|replace("T", " ") }} UTC:
+  {{ last_run.stats.crawl.locations }} website locations, {{ last_run.stats.crm_accounts }} CRM accounts.</p>{% endif %}
+
+{% if msg %}<p class="msg">{{ msg }}</p>{% endif %}
+{% if err %}<p class="err">{{ err }}</p>{% endif %}
+{% if last_run %}{% set lr = last_run.stats %}
+  {% if not lr.crawl.complete.ok %}<p class="warn">The last crawl looked incomplete, so no "not on the website" conclusions were drawn:
+     {{ lr.crawl.complete.problems|join("; ") }}</p>{% endif %}
+  {% if lr.crawl.complete.ok and lr.absence_checks is defined and not lr.absence_checks %}<p class="warn">"Not on the website"
+     checks were switched off for this run because a website page could not be read completely (below).</p>{% endif %}
+  {% for qd in lr.quarantined %}<p class="warn">Website page <code>{{ qd.slug }}</code> skipped (no proposal made): {{ qd.problems|join(", ") }}</p>{% endfor %}
+  {% for d in lr.deferred %}<p class="info">{{ d.location }}: {{ d.why }} ({{ d.accounts|join(", ") }}).</p>{% endfor %}
+  {% if lr.locked %}<p class="info">Left alone this run because a write on them is unfinished: {{ lr.locked|join(", ") }}.</p>{% endif %}
+{% endif %}
+
+<div class="bar">
+  <div class="seg">
+  {% for s in ["pending", "applied", "rejected", "failed", "superseded", "all"] %}
+    <a href="/?status={{ s }}" class="{{ 'on' if s == status }}">{{ s|capitalize }}<span class="n">{{ counts.get(s, 0) if s != 'all' else counts.values()|sum }}</span></a>
+  {% endfor %}
+  </div>
+  <input id="find" type="search" placeholder="Find a proposal: name or city, e.g. Lima" autocomplete="off"
+         style="width:300px;height:36px">
+  <form method="post" action="/run"><button title="Scrape the website and match again. Items already decided are not proposed again.">Run pipeline now</button></form>
+</div>
+
+{% if not groups %}<p class="box muted">Nothing here.</p>{% endif %}
+{% for kind, items in groups %}
+<section class="group card">
+  <div class="card-h"><h2>{{ kind_label[kind] }}</h2><span class="muted">{{ items|length }}</span></div>
+  <table class="q rows">
+    <colgroup><col class="c-title"><col class="c-chg"><col class="c-conf"><col class="c-st"></colgroup>
+    <thead><tr><th>Proposal</th><th>Changes</th><th>Confidence</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for p in items %}
+    <tr class="{{ '' if p.status == 'pending' else 'done' }}">
+      <td><a class="t" href="/p/{{ p.key }}">{{ p.title|replace(" -> ", " → ") }}</a>{% if p.regressed %} <span class="pill failed">regressed</span>{% endif %}
+        <div>{% for t in p.tags %}<span class="tag">{{ t }}</span>{% endfor %}</div></td>
+      <td class="chg">
+        {% for op in p.ops %}
+          {% if op.action == "create" %}<span class="new">+ new account</span>{% else %}<span class="f">{{ op.fields.keys()|join(", ") }}</span>{% endif %}{% if not loop.last %}<br>{% endif %}
+        {% endfor %}
+      </td>
+      <td><span class="pill {{ p.confidence }}">{{ p.confidence }}</span></td>
+      <td><span class="pill {{ p.status }}">{{ p.status }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endfor %}
+<p id="nohit" class="box muted" hidden>No proposal matches.</p>
+<script>
+  const box = document.getElementById("find");
+  box.addEventListener("input", () => {
+    const q = box.value.trim().toLowerCase(); let any = false;
+    document.querySelectorAll("section.group").forEach(sec => {
+      let n = 0;
+      sec.querySelectorAll("tbody tr").forEach(tr => {
+        const hit = !q || tr.textContent.toLowerCase().includes(q);
+        tr.hidden = !hit; if (hit) n++;
+      });
+      sec.hidden = n === 0; if (n) any = true;
+    });
+    document.getElementById("nohit").hidden = any;
+  });
+</script>
+{% endblock %}
